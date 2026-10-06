@@ -8,10 +8,42 @@ export default function InvoicePrintModal() {
   const [copyType, setCopyType] = useState('ORIGINAL FOR RECIPIENT');
   const [copied, setCopied] = useState(false);
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
   if (!isPrintModalOpen || !activeInvoiceForPrint) return null;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setIsDownloading(true);
+      const invoiceElem = document.getElementById('printable-invoice-element');
+      if (!invoiceElem) {
+        window.print();
+        return;
+      }
+
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+
+      const invoiceNum = (activeInvoiceForPrint.invoiceNumber || 'Invoice').replace(/[\/\\]/g, '_');
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: `${invoiceNum}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      await html2pdf().set(opt).from(invoiceElem).save();
+    } catch (err) {
+      console.error('Direct PDF export error, falling back to print dialog:', err);
+      window.print();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -21,10 +53,10 @@ export default function InvoicePrintModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:inset-auto">
+    <div className="invoice-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:inset-auto">
       
       {/* Container Card */}
-      <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl max-h-[96vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:max-h-none print:w-full print:bg-white">
+      <div className="invoice-modal-card bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl max-h-[96vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:max-h-none print:w-full print:bg-white">
         
         {/* Top Action Bar (hidden when printing) */}
         <div className="no-print bg-slate-900 text-white px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
@@ -56,24 +88,25 @@ export default function InvoicePrintModal() {
               <option value="TRIPLICATE FOR SUPPLIER">Triplicate (Office Copy)</option>
             </select>
 
+            {/* Direct Download PDF Button */}
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloading}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              title="Download pure A4 PDF file directly"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>{isDownloading ? 'Generating PDF...' : 'Download PDF'}</span>
+            </button>
+
             {/* Print Button */}
             <button
               onClick={handlePrint}
               className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-              title="Print directly to standard A4 paper or save as PDF"
+              title="Print directly to standard A4 paper or browser print"
             >
               <Printer className="h-3.5 w-3.5" />
               <span>Print A4</span>
-            </button>
-
-            {/* Download PDF via browser print dialogue */}
-            <button
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 transition-colors cursor-pointer"
-              title="Use Save as PDF in the print dialog"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Save PDF</span>
             </button>
 
             {/* Close button */}

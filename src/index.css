@@ -35,27 +35,55 @@
 
 /* Clean print styles for A4 Invoice */
 @media print {
-  body {
+  html, body {
     background-color: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
   
+  /* Hide all application UI components */
   .no-print,
+  #app-main-content,
   nav,
   aside,
   header,
+  main,
+  footer,
   .sidebar,
-  .print-hide {
+  .print-hide,
+  [role="alert"] {
     display: none !important;
   }
   
-  .print-only {
+  /* Remove modal overlay styling during print */
+  .invoice-modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
     display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  
-  .print-container {
+
+  .invoice-modal-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .printable-invoice {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
@@ -69,7 +97,7 @@
     margin: 8mm 8mm 8mm 8mm;
   }
 
-  /* Force backgrounds and border prints */
+  /* Force background colors and crisp borders in print */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;

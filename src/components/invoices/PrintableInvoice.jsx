@@ -34,7 +34,10 @@ export default function PrintableInvoice({ invoice, settings }) {
   const amountInWords = numberToWordsIndian(grandTotal);
 
   return (
-    <div className="printable-invoice bg-white text-black mx-auto w-full max-w-[800px] p-6 sm:p-8 font-sans text-xs select-text print:p-0 print:border-none print:shadow-none print:max-w-none">
+    <div 
+      id="printable-invoice-element"
+      className="printable-invoice bg-white text-black mx-auto w-full max-w-[800px] p-6 sm:p-8 font-sans text-xs select-text print:p-0 print:border-none print:shadow-none print:max-w-none"
+    >
       
       {/* Top Header */}
       <div className="flex justify-between items-start mb-4">

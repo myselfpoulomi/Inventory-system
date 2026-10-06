@@ -255,11 +255,15 @@ export function AppProvider({ children }) {
       stockMovements: newMovements
     }));
 
-    api.products.create(newProduct).catch(err => {
-      console.warn('Supabase product create notice:', err.message);
-    });
+    api.products.create(newProduct)
+      .then(() => {
+        showToast(`Product "${newProduct.name}" saved to Supabase!`);
+      })
+      .catch(err => {
+        console.error('Supabase product create error:', err);
+        showToast(`Supabase write blocked: ${err.message}`, 'error');
+      });
 
-    showToast(`Added product "${newProduct.name}"`);
     return newProduct;
   };
 
@@ -396,11 +400,15 @@ export function AppProvider({ children }) {
       customers: [newCustomer, ...prev.customers]
     }));
 
-    api.customers.create(newCustomer).catch(err => {
-      console.warn('Supabase customer create notice:', err.message);
-    });
+    api.customers.create(newCustomer)
+      .then(() => {
+        showToast(`Customer "${newCustomer.name}" saved to Supabase!`);
+      })
+      .catch(err => {
+        console.error('Supabase customer create error:', err);
+        showToast(`Supabase write blocked: ${err.message}`, 'error');
+      });
 
-    showToast(`Added customer "${newCustomer.name}"`);
     return newCustomer;
   };
 
@@ -590,9 +598,15 @@ export function AppProvider({ children }) {
     }));
 
     // Persist Invoice and Stock Changes to Supabase
-    api.invoices.create(newInvoice).catch(err => {
-      console.warn('Supabase invoice create notice:', err.message);
-    });
+    api.invoices.create(newInvoice)
+      .then(() => {
+        showToast(`Invoice ${invoiceNum} generated & saved in Supabase!`);
+      })
+      .catch(err => {
+        console.error('Supabase invoice create error:', err);
+        showToast(`Invoice saved locally, but Supabase blocked write: ${err.message}`, 'error');
+      });
+
     api.settings.update({ nextInvoiceNumber: nextNum }).catch(err => {
       console.warn('Supabase settings update notice:', err.message);
     });
@@ -606,7 +620,6 @@ export function AppProvider({ children }) {
       });
     }
 
-    showToast(`Invoice ${invoiceNum} generated successfully!`);
     return newInvoice;
   };
 
