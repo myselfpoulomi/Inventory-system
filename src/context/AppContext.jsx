@@ -12,23 +12,23 @@ import {
   INITIAL_STOCK_MOVEMENTS,
   INITIAL_PAYMENTS
 } from '../data/initialData';
+import { api, supabase } from '../services/supabaseClient';
 
 const AppContext = createContext();
 
-const STORAGE_KEY = 'ROUTH_AUTO_DATA_V1';
+const STORAGE_KEY = 'ROUTH_AUTO_DATA_LIVE_V2';
 
 export function AppProvider({ children }) {
-  // Load stored state or use initial demo data
+  // Load stored state or use clean initial state
   const [data, setData] = useState(() => {
     try {
-      let stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        // Check if legacy key existed
-        stored = localStorage.getItem('AUTOPRO_DATA_V1');
-      }
+      // Remove legacy keys containing old mock data
+      localStorage.removeItem('AUTOPRO_DATA_V1');
+      localStorage.removeItem('ROUTH_AUTO_DATA_V1');
+      
+      const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Ensure business settings and users reflect one Admin and one User
         parsed.users = INITIAL_USERS;
         if (parsed.settings) {
           parsed.settings.businessName = 'Routh Automobile';
@@ -92,6 +92,46 @@ export function AppProvider({ children }) {
       console.error('Failed to save to localStorage:', e);
     }
   }, [data]);
+
+  // Load and sync live data from Supabase on startup
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSupabaseData() {
+      if (!supabase) return;
+      try {
+        const [dbProducts, dbCustomers, dbInvoices, dbSettings] = await Promise.allSettled([
+          api.products.getAll(),
+          api.customers.getAll(),
+          api.invoices.getAll(),
+          api.settings.get(),
+        ]);
+
+        if (!isMounted) return;
+
+        setData(prev => {
+          const updated = { ...prev };
+          if (dbProducts.status === 'fulfilled' && Array.isArray(dbProducts.value)) {
+            updated.products = dbProducts.value;
+          }
+          if (dbCustomers.status === 'fulfilled' && Array.isArray(dbCustomers.value)) {
+            updated.customers = dbCustomers.value;
+          }
+          if (dbInvoices.status === 'fulfilled' && Array.isArray(dbInvoices.value)) {
+            updated.invoices = dbInvoices.value;
+          }
+          if (dbSettings.status === 'fulfilled' && dbSettings.value) {
+            updated.settings = { ...prev.settings, ...dbSettings.value };
+          }
+          return updated;
+        });
+      } catch (err) {
+        console.warn('Supabase sync notice:', err);
+      }
+    }
+
+    loadSupabaseData();
+    return () => { isMounted = false; };
+  }, []);
 
   // Auth functions - strictly 1 Admin and 1 User
   const login = (roleOrName = 'admin') => {
@@ -166,10 +206,13 @@ export function AppProvider({ children }) {
       ...prev,
       settings: { ...prev.settings, ...newSettings }
     }));
+    api.settings.update(newSettings).catch(err => {
+      console.warn('Supabase settings update notice:', err.message);
+    });
     showToast('Business & invoice settings updated');
   };
 
-  // Product Operations
+  // Product Operations (Inventory CRUD with Supabase)
   const addProduct = (productData) => {
     const newId = `prod-${Date.now()}`;
     const sku = productData.sku?.trim() || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -212,6 +255,10 @@ export function AppProvider({ children }) {
       stockMovements: newMovements
     }));
 
+    api.products.create(newProduct).catch(err => {
+      console.warn('Supabase product create notice:', err.message);
+    });
+
     showToast(`Added product "${newProduct.name}"`);
     return newProduct;
   };
@@ -243,6 +290,12 @@ export function AppProvider({ children }) {
       });
     }
 
+    const mergedProduct = {
+      ...oldProduct,
+      ...updatedFields,
+      currentQuantity: newQty,
+    };
+
     setData(prev => ({
       ...prev,
       products: prev.products.map(p => p.id === id ? {
@@ -258,6 +311,10 @@ export function AppProvider({ children }) {
       stockMovements: newMovements
     }));
 
+    api.products.update(id, mergedProduct).catch(err => {
+      console.warn('Supabase product update notice:', err.message);
+    });
+
     showToast(`Updated product "${updatedFields.name || oldProduct.name}"`);
   };
 
@@ -267,6 +324,11 @@ export function AppProvider({ children }) {
       ...prev,
       products: prev.products.filter(p => p.id !== id)
     }));
+
+    api.products.delete(id).catch(err => {
+      console.warn('Supabase product delete notice:', err.message);
+    });
+
     showToast(`Deleted product "${prod?.name || id}"`, 'info');
   };
 
@@ -319,7 +381,7 @@ export function AppProvider({ children }) {
     showToast(`Stock adjusted for "${product.name}": ${previousStock} → ${newStock}`);
   };
 
-  // Customer Operations
+  // Customer Operations (Supabase CRUD)
   const addCustomer = (customerData) => {
     const newId = `cust-${Date.now()}`;
     const newCustomer = {
@@ -334,15 +396,27 @@ export function AppProvider({ children }) {
       customers: [newCustomer, ...prev.customers]
     }));
 
+    api.customers.create(newCustomer).catch(err => {
+      console.warn('Supabase customer create notice:', err.message);
+    });
+
     showToast(`Added customer "${newCustomer.name}"`);
     return newCustomer;
   };
 
   const updateCustomer = (id, updatedFields) => {
+    const existing = data.customers.find(c => c.id === id);
+    const merged = { ...existing, ...updatedFields };
+
     setData(prev => ({
       ...prev,
-      customers: prev.customers.map(c => c.id === id ? { ...c, ...updatedFields } : c)
+      customers: prev.customers.map(c => c.id === id ? merged : c)
     }));
+
+    api.customers.update(id, merged).catch(err => {
+      console.warn('Supabase customer update notice:', err.message);
+    });
+
     showToast('Customer details updated');
   };
 
@@ -352,6 +426,11 @@ export function AppProvider({ children }) {
       ...prev,
       customers: prev.customers.filter(c => c.id !== id)
     }));
+
+    api.customers.delete(id).catch(err => {
+      console.warn('Supabase customer delete notice:', err.message);
+    });
+
     showToast(`Customer "${cust?.name || id}" removed`, 'info');
   };
 
@@ -510,6 +589,23 @@ export function AppProvider({ children }) {
       }
     }));
 
+    // Persist Invoice and Stock Changes to Supabase
+    api.invoices.create(newInvoice).catch(err => {
+      console.warn('Supabase invoice create notice:', err.message);
+    });
+    api.settings.update({ nextInvoiceNumber: nextNum }).catch(err => {
+      console.warn('Supabase settings update notice:', err.message);
+    });
+    if (invoicePayload.items && invoicePayload.items.length > 0) {
+      invoicePayload.items.forEach(it => {
+        const prod = data.products.find(p => p.id === it.productId);
+        if (prod) {
+          const newQty = Math.max(0, prod.currentQuantity - Number(it.quantity));
+          api.products.update(prod.id, { currentQuantity: newQty }).catch(() => {});
+        }
+      });
+    }
+
     showToast(`Invoice ${invoiceNum} generated successfully!`);
     return newInvoice;
   };
@@ -568,6 +664,20 @@ export function AppProvider({ children }) {
       stockMovements: [...movements, ...prev.stockMovements],
       customers: updatedCustomers
     }));
+
+    // Delete in Supabase and restore stock in Supabase
+    api.invoices.delete(id).catch(err => {
+      console.warn('Supabase invoice delete notice:', err.message);
+    });
+    if (inv.items && inv.items.length > 0) {
+      inv.items.forEach(it => {
+        const prod = data.products.find(p => p.id === it.productId);
+        if (prod) {
+          const restoredQty = prod.currentQuantity + Number(it.quantity);
+          api.products.update(prod.id, { currentQuantity: restoredQty }).catch(() => {});
+        }
+      });
+    }
 
     showToast(`Invoice ${inv.invoiceNumber} cancelled. Stock restored to inventory.`, 'info');
   };
